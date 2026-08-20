@@ -12,10 +12,11 @@ with the Greeks and visualizations. Part of a broader quant portfolio
 - **Visualization** of how each Greek behaves across spot price
 - **Binomial tree (CRR)** pricer supporting both European and American exercise
 - **Convergence analysis** showing the tree converging to Black-Scholes as steps increase, plus the early exercise premium for American puts
+- **Monte Carlo pricer** using simulated GBM paths, with antithetic variates for variance reduction
+- **Asian (path-dependent) option** pricing, which neither Black-Scholes nor the binomial tree can handle directly
 
-Planned next: Monte Carlo pricing (including a path-dependent Asian option),
-plus a comparison against real market option prices to look at implied
-volatility skew.
+Planned next: comparison against real market option prices to look at
+implied volatility skew.
 
 ## Example
 
@@ -62,6 +63,36 @@ characteristic of the CRR tree, not a bug). The right chart shows the early
 exercise premium for an American put across spot prices — largest deep
 in-the-money, decaying to zero out-of-the-money.
 
+## Monte Carlo Pricing & Variance Reduction
+
+```python
+from models.monte_carlo import MonteCarloOptionPricer
+
+mc = MonteCarloOptionPricer(S=100, K=100, T=1, r=0.05, sigma=0.2,
+                             option_type="call", n_paths=50_000, antithetic=True)
+price, std_err = mc.price_european()
+# price ~ 10.43, matches Black-Scholes' 10.4506 within statistical error
+```
+
+**Variance reduction (antithetic variates):** for every random path generated,
+a mirrored path is also generated using the negated random draws. Averaging
+paired paths cancels out some sampling noise, meaningfully reducing the
+standard error for the same number of simulated draws — i.e. more accuracy
+for the same compute.
+
+![Monte Carlo Paths](notebooks/monte_carlo_paths.png)
+
+The left chart shows sample simulated price paths under GBM. The right chart
+is the key result: standard error consistently drops when using antithetic
+variates, across every sample size tested.
+
+**Asian options:** the pricer also handles path-dependent Asian options,
+where the payoff depends on the *average* price over the option's life
+rather than just the terminal price. This is a case Black-Scholes and the
+binomial tree can't price directly. As expected, the Asian call is cheaper
+than the equivalent European call, since averaging dampens the effect of
+volatility on the payoff.
+
 ## Running it
 
 ```bash
@@ -76,6 +107,7 @@ python tests/test_black_scholes.py
 # Regenerate the plots
 python notebooks/plot_greeks.py
 python notebooks/plot_convergence.py
+python notebooks/plot_monte_carlo.py
 ```
 
 ## Validation
@@ -87,10 +119,11 @@ and Other Derivatives*) and against put-call parity:
 C - P = S - K * e^(-rT)
 ```
 
-All 7 Black-Scholes tests pass (`tests/test_black_scholes.py`), and all 6
-binomial tree tests pass (`tests/test_binomial_tree.py`), including a check
-that the tree converges to Black-Scholes for European options and that
-American puts are worth at least as much as their European counterpart.
+All 7 Black-Scholes tests pass (`tests/test_black_scholes.py`), all 6
+binomial tree tests pass (`tests/test_binomial_tree.py`), and all 6 Monte
+Carlo tests pass (`tests/test_monte_carlo.py`) — including a check that
+antithetic variates measurably reduce standard error, and a zero-volatility
+edge case where the price should equal discounted intrinsic value exactly.
 
 ## Project structure
 
@@ -98,15 +131,19 @@ American puts are worth at least as much as their European counterpart.
 options-pricing/
 ├── models/
 │   ├── black_scholes.py       # Closed-form pricing model + Greeks
-│   └── binomial_tree.py       # CRR tree, European + American exercise
+│   ├── binomial_tree.py       # CRR tree, European + American exercise
+│   └── monte_carlo.py         # GBM simulation, antithetic variates, Asian options
 ├── tests/
 │   ├── test_black_scholes.py  # Unit tests
-│   └── test_binomial_tree.py  # Unit tests
+│   ├── test_binomial_tree.py  # Unit tests
+│   └── test_monte_carlo.py    # Unit tests
 ├── notebooks/
 │   ├── plot_greeks.py         # Greeks visualization script
 │   ├── greeks_vs_spot.png     # Generated chart
 │   ├── plot_convergence.py    # Convergence visualization script
-│   └── binomial_convergence.png  # Generated chart
+│   ├── binomial_convergence.png  # Generated chart
+│   ├── plot_monte_carlo.py    # Monte Carlo visualization script
+│   └── monte_carlo_paths.png  # Generated chart
 ├── data/                      # (reserved for market data comparison, next step)
 ├── requirements.txt
 └── README.md
