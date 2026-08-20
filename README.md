@@ -14,9 +14,10 @@ with the Greeks and visualizations. Part of a broader quant portfolio
 - **Convergence analysis** showing the tree converging to Black-Scholes as steps increase, plus the early exercise premium for American puts
 - **Monte Carlo pricer** using simulated GBM paths, with antithetic variates for variance reduction
 - **Asian (path-dependent) option** pricing, which neither Black-Scholes nor the binomial tree can handle directly
+- **Real market comparison**: pulls a live option chain (Yahoo Finance), backs out implied volatility per strike, and plots the volatility skew against the Black-Scholes flat-vol assumption
 
-Planned next: comparison against real market option prices to look at
-implied volatility skew.
+This project is complete as a portfolio piece. Possible extensions: local
+volatility / SABR models, or a Greeks-based hedging simulation.
 
 ## Example
 
@@ -93,6 +94,45 @@ binomial tree can't price directly. As expected, the Asian call is cheaper
 than the equivalent European call, since averaging dampens the effect of
 volatility on the payoff.
 
+## Real Market Comparison & Implied Volatility Skew
+
+Black-Scholes assumes constant volatility across all strikes. Real markets
+don't behave that way: out-of-the-money puts are typically priced with
+higher implied volatility than at-the-money options, reflecting how the
+market prices downside/crash risk. This is the "volatility skew," and
+plotting it is one of the clearest ways to show where a theoretical model
+departs from reality.
+
+```bash
+# Fetch a live option chain and back out implied vol per strike
+python models/market_comparison.py --ticker AAPL
+
+# Plot the skew from the saved data
+python notebooks/plot_vol_skew.py --ticker AAPL
+```
+
+![AAPL Volatility Skew](notebooks/AAPL_vol_skew.png)
+
+This is real AAPL option chain data. Implied volatility is lowest near the
+money (around the $300-330 strikes, close to the $316.83 spot price at the
+time) and rises on both wings — a "volatility smile" with a stronger skew
+on the downside. The steeper rise on the put side reflects that the market
+prices downside protection more expensively than equivalent upside
+exposure, which a constant-volatility model like Black-Scholes cannot
+capture on its own.
+
+The implied volatility solver uses Brent's method to find the volatility
+that makes the Black-Scholes price match the observed market price. It's
+validated with synthetic data: price an option at a known volatility, solve
+for it, and confirm we recover the same number (see
+`tests/test_market_comparison.py`). The live data fetch also filters out
+illiquid/stale quotes (wide spreads, deep OTM strikes, near-zero prices) to
+avoid noisy or nonsensical implied vols.
+
+Note: this part requires live internet access to Yahoo Finance and is meant
+to be run locally rather than regenerated automatically, since option chains
+change constantly and depend on market hours.
+
 ## Running it
 
 ```bash
@@ -120,10 +160,12 @@ C - P = S - K * e^(-rT)
 ```
 
 All 7 Black-Scholes tests pass (`tests/test_black_scholes.py`), all 6
-binomial tree tests pass (`tests/test_binomial_tree.py`), and all 6 Monte
-Carlo tests pass (`tests/test_monte_carlo.py`) — including a check that
-antithetic variates measurably reduce standard error, and a zero-volatility
-edge case where the price should equal discounted intrinsic value exactly.
+binomial tree tests pass (`tests/test_binomial_tree.py`), all 6 Monte Carlo
+tests pass (`tests/test_monte_carlo.py`), and all 4 implied volatility
+solver tests pass (`tests/test_market_comparison.py`) — including a check
+that the solver exactly recovers a known volatility from a synthetically
+generated price, and correctly returns NaN for prices with no valid
+implied vol.
 
 ## Project structure
 
@@ -132,18 +174,21 @@ options-pricing/
 ├── models/
 │   ├── black_scholes.py       # Closed-form pricing model + Greeks
 │   ├── binomial_tree.py       # CRR tree, European + American exercise
-│   └── monte_carlo.py         # GBM simulation, antithetic variates, Asian options
+│   ├── monte_carlo.py         # GBM simulation, antithetic variates, Asian options
+│   └── market_comparison.py   # Live option chain fetch + implied vol solver
 ├── tests/
 │   ├── test_black_scholes.py  # Unit tests
 │   ├── test_binomial_tree.py  # Unit tests
-│   └── test_monte_carlo.py    # Unit tests
+│   ├── test_monte_carlo.py    # Unit tests
+│   └── test_market_comparison.py  # Unit tests (synthetic data validation)
 ├── notebooks/
 │   ├── plot_greeks.py         # Greeks visualization script
 │   ├── greeks_vs_spot.png     # Generated chart
 │   ├── plot_convergence.py    # Convergence visualization script
 │   ├── binomial_convergence.png  # Generated chart
 │   ├── plot_monte_carlo.py    # Monte Carlo visualization script
-│   └── monte_carlo_paths.png  # Generated chart
+│   ├── monte_carlo_paths.png  # Generated chart
+│   └── plot_vol_skew.py       # Implied vol skew plotting script (run after market_comparison.py)
 ├── data/                      # (reserved for market data comparison, next step)
 ├── requirements.txt
 └── README.md
