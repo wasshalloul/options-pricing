@@ -148,6 +148,10 @@ python tests/test_black_scholes.py
 python notebooks/plot_greeks.py
 python notebooks/plot_convergence.py
 python notebooks/plot_monte_carlo.py
+
+# Fetch live market data and plot the implied vol skew
+python models/market_comparison.py --ticker AAPL
+python notebooks/plot_vol_skew.py --ticker AAPL
 ```
 
 ## Validation
@@ -189,7 +193,7 @@ options-pricing/
 │   ├── plot_monte_carlo.py    # Monte Carlo visualization script
 │   ├── monte_carlo_paths.png  # Generated chart
 │   └── plot_vol_skew.py       # Implied vol skew plotting script (run after market_comparison.py)
-├── data/                      # (reserved for market data comparison, next step)
+├── data/                      # Saved market data (e.g. AAPL_option_chain.csv from market_comparison.py)
 ├── requirements.txt
 └── README.md
 ```
